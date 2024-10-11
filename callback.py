@@ -6,7 +6,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Replace with your actual Telegram bot token
-TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'  # Update this with your actual bot token
+TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 @app.route('/billing/callback1', methods=['POST'])
@@ -23,7 +23,7 @@ def payment_callback():
             payment_status = data['response'].get('Status')
 
             if payment_status == "Success":
-                notify_user(transaction_reference, payment_status)
+                notify_user(transaction_reference, data['response'])
             else:
                 logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
             return jsonify({"status": "success"}), 200
@@ -35,7 +35,7 @@ def payment_callback():
             payment_status = data['response'].get('Payment_Method')
 
             if payment_status == "MPESA":
-                notify_user(transaction_reference, payment_status)
+                notify_user(transaction_reference, data['response'])
             else:
                 logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
             return jsonify({"status": "success"}), 200
@@ -48,8 +48,9 @@ def payment_callback():
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-def notify_user(transaction_reference, status):
-    user_id = get_user_id_from_transaction(transaction_reference)
+def notify_user(transaction_reference, response):
+    external_reference = response.get('ExternalReference')  # Using ExternalReference for user ID mapping
+    user_id = get_user_id_from_transaction(external_reference)
     logging.info(f"Attempting to notify user with ID: {user_id} for transaction: {transaction_reference}")
 
     if user_id:
@@ -60,13 +61,14 @@ def notify_user(transaction_reference, status):
     else:
         logging.error(f"No user ID found for transaction reference: {transaction_reference}")
 
-def get_user_id_from_transaction(transaction_reference):
-    # Replace this with your logic to find the user ID based on transaction_reference
+def get_user_id_from_transaction(external_reference):
+    # Replace this with your logic to find the user ID based on external_reference
     user_id_mapping = {
-        'INV-009': 12345678,  # Example mapping
+        'INV-009': 12345678,  # Example mapping for an external reference
+        'SJB5RNLYRN': 87654321,  # Add mapping for the specific transaction
         # Add more mappings as needed
     }
-    return user_id_mapping.get(transaction_reference)
+    return user_id_mapping.get(external_reference)
 
 if __name__ == '__main__':
     app.run(debug=True)
