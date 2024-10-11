@@ -21,7 +21,7 @@ def load_http_links():
 
 # Send message via Telegram bot
 def send_message(chat_id, message):
-    url = f"https://api.telegram.org/bot<YOUR_TELEGRAM_BOT_TOKEN>/sendMessage"
+    url = f"https://api.telegram.org/bot<7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ>/sendMessage"
     payload = {
         'chat_id': chat_id,
         'text': message,
