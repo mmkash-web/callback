@@ -1,79 +1,65 @@
 from flask import Flask, request, jsonify
 import logging
-from telegram import Bot
-import asyncio
+import json
+import requests
 
 app = Flask(__name__)
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Replace with your actual Telegram bot token
-TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
-bot = Bot(token=TELEGRAM_BOT_TOKEN)
+# Load file links from JSON
+def load_links():
+    """Load file links from links.json."""
+    with open('links.json', 'r') as file:
+        return json.load(file)
 
-@app.route('/')
-def index():
-    return "Welcome to the M-Pesa Payment Callback API!"
+links = load_links()
+
+# Function to send a message to your Telegram bot
+def send_notification_to_telegram(transaction_id, phone_number):
+    """Send a notification to Telegram about the successful payment."""
+    bot_token = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'  # Replace with your bot token
+    chat_id = '<YOUR_CHAT_ID>'  # Replace with your chat ID
+    message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPhone Number: {phone_number}"
+    
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': message
+    }
+    
+    try:
+        response = requests.post(url, json=payload)
+        logger.info(f"Telegram notification sent: {response.json()}")
+    except Exception as e:
+        logger.error(f"Failed to send Telegram notification: {e}")
 
 @app.route('/billing/callback1', methods=['POST'])
-def payment_callback():
+def handle_payment_callback():
+    """Handle payment confirmation callback from PayHero."""
     try:
-        # Get JSON data from the callback
-        data = request.get_json()
-        logging.info(f"Received callback data: {data}")
+        # Parse the incoming JSON payload
+        data = request.json
+        transaction_id = data.get('transaction_id')
+        status = data.get('status')
+        phone_number = data.get('phone_number')
 
-        # Check if the response contains M-Pesa Express data
-        if 'response' in data and 'MpesaReceiptNumber' in data['response']:
-            amount = data['response'].get('Amount', 0)
-            transaction_reference = data['response'].get('MpesaReceiptNumber')
-            payment_status = data['response'].get('Status')
+        # Log the payment details
+        logger.info(f"Payment Callback Received: Transaction ID: {transaction_id}, Status: {status}, Phone Number: {phone_number}")
 
-            if payment_status == "Success":
-                asyncio.run(notify_user(transaction_reference, data['response']))
-            else:
-                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
-            return jsonify({"status": "success"}), 200
-        
-        # Check for WooCommerce/Custom callback data
-        elif 'response' in data and 'MPESA_Reference' in data['response']:
-            amount = data['response'].get('Amount', 0)
-            transaction_reference = data['response'].get('MPESA_Reference')
-            payment_status = data['response'].get('Payment_Method')
-
-            if payment_status == "MPESA":
-                asyncio.run(notify_user(transaction_reference, data['response']))
-            else:
-                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
-            return jsonify({"status": "success"}), 200
-
+        if status == "successful":
+            # Notify your Telegram bot
+            send_notification_to_telegram(transaction_id, phone_number)
+            return jsonify({"message": "Payment processed successfully."}), 200
         else:
-            logging.error("Invalid callback data format")
-            return jsonify({"status": "error", "message": "Invalid format"}), 400
-
+            logger.warning(f"Payment not successful for Transaction ID: {transaction_id}")
+            return jsonify({"message": "Payment not successful."}), 400
     except Exception as e:
-        logging.error(f"Error processing callback: {e}")
-        return jsonify({"status": "error", "message": "Internal server error"}), 500
-
-async def notify_user(transaction_reference, response):
-    external_reference = response.get('ExternalReference')  # Using ExternalReference for user ID mapping
-    user_id = get_user_id_from_transaction(external_reference)
-    logging.info(f"Attempting to notify user with ID: {user_id} for transaction: {transaction_reference}")
-
-    if user_id:
-        try:
-            await bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
-        except Exception as e:
-            logging.error(f"Failed to send message: {e}")
-    else:
-        logging.error(f"No user ID found for transaction reference: {transaction_reference}")
-
-def get_user_id_from_transaction(external_reference):
-    # Replace this with your logic to find the user ID based on external_reference
-    user_id_mapping = {
-        'INV-009': 12345678,  # Example mapping for an external reference
-        'SJB4RNZZS6': 87654321,  # Add mapping for the specific transaction
-        # Add more mappings as needed
-    }
-    return user_id_mapping.get(external_reference)
+        logger.error(f"Error handling payment callback: {e}")
+        return jsonify({"message": "Error processing payment."}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
+
