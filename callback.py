@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify
 import logging
 import json
 import requests
-import os
 
 app = Flask(__name__)
 
@@ -13,20 +12,16 @@ logger = logging.getLogger(__name__)
 # Load file links from JSON
 def load_links():
     """Load file links from links.json."""
-    try:
-        with open('links.json', 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        logger.error("links.json file not found.")
-        return {}
+    with open('links.json', 'r') as file:
+        return json.load(file)
 
 links = load_links()
 
 # Function to send a message to your Telegram bot
 def send_notification_to_telegram(transaction_id, phone_number):
     """Send a notification to Telegram about the successful payment."""
-    bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')  # Get bot token from environment variable
-    chat_id = os.environ.get('TELEGRAM_CHAT_ID')  # Get chat ID from environment variable
+    bot_token = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'  # Replace with your bot token
+    chat_id = '<YOUR_CHAT_ID>'  # Replace with your chat ID
     message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPhone Number: {phone_number}"
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -41,34 +36,32 @@ def send_notification_to_telegram(transaction_id, phone_number):
     except Exception as e:
         logger.error(f"Failed to send Telegram notification: {e}")
 
-@app.route('/billing/callback1', methods=['GET', 'POST'])
+@app.route('/billing/callback1', methods=['POST'])
 def handle_payment_callback():
     """Handle payment confirmation callback from PayHero."""
+    # Log the incoming request method
+    logger.info(f"Received {request.method} request on /billing/callback1")
+    
     try:
-        if request.method == 'POST':
-            # Parse the incoming JSON payload
-            data = request.json
-            transaction_id = data.get('transaction_id')
-            status = data.get('status')
-            phone_number = data.get('phone_number')
+        # Parse the incoming JSON payload
+        data = request.json
+        transaction_id = data.get('transaction_id')
+        status = data.get('status')
+        phone_number = data.get('phone_number')
 
-            # Log the payment details
-            logger.info(f"Payment Callback Received: Transaction ID: {transaction_id}, Status: {status}, Phone Number: {phone_number}")
+        # Log the payment details
+        logger.info(f"Payment Callback Received: Transaction ID: {transaction_id}, Status: {status}, Phone Number: {phone_number}")
 
-            if status == "successful":
-                # Notify your Telegram bot
-                send_notification_to_telegram(transaction_id, phone_number)
-                return jsonify({"message": "Payment processed successfully."}), 200
-            else:
-                logger.warning(f"Payment not successful for Transaction ID: {transaction_id}")
-                return jsonify({"message": "Payment not successful."}), 400
+        if status == "successful":
+            # Notify your Telegram bot
+            send_notification_to_telegram(transaction_id, phone_number)
+            return jsonify({"message": "Payment processed successfully."}), 200
         else:
-            logger.warning("GET request received. Only POST is allowed.")
-            return jsonify({"error": "Method not allowed"}), 405
-
+            logger.warning(f"Payment not successful for Transaction ID: {transaction_id}")
+            return jsonify({"message": "Payment not successful."}), 400
     except Exception as e:
         logger.error(f"Error handling payment callback: {e}")
         return jsonify({"message": "Error processing payment."}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    app.run(host='0.0.0.0', port=49480)  # Change port as necessary for your environment
