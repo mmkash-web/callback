@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-@app.route('/billing/callback1', methods=['POST'])  # Ensure this matches your callback URL
+@app.route('/billing/callback1', methods=['POST'])
 def payment_callback():
     try:
         # Get JSON data from M-Pesa callback
@@ -17,21 +17,30 @@ def payment_callback():
         logging.info(f"Received callback data: {data}")
 
         # Validate the incoming data structure
-        if 'response' not in data or 'Status' not in data['response']:
+        if 'response' not in data:
             logging.error("Invalid callback data format")
             return jsonify({"status": "error", "message": "Invalid format"}), 400
 
-        amount = data['response'].get('Amount', 0)
-        transaction_reference = data['response'].get('Transaction_Reference')
-        payment_status = data['response'].get('Payment_Method')  # Change as needed based on your needs
+        response = data['response']
+        transaction_reference = response.get('MPESA_Reference') or response.get('Transaction_Reference')
+        amount = response.get('Amount', 0)
+        payment_method = response.get('Payment_Method', 'Unknown')
+        payment_status = response.get('Status') or response.get('woocommerce_payment_status')
+
+        # Ensure required fields are present
+        if not transaction_reference or not payment_status:
+            logging.error("Transaction reference or status missing")
+            return jsonify({"status": "error", "message": "Missing transaction reference or status"}), 400
 
         # Process payment confirmation
-        if payment_status == "MPESA":
+        if payment_status.lower() in ["success", "complete"]:  # Adjust based on your actual data
             notify_user(transaction_reference, payment_status)
+            logging.info(f"Payment processed for transaction reference: {transaction_reference}, amount: {amount}")
         else:
             logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
 
         return jsonify({"status": "success"}), 200
+
     except Exception as e:
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
