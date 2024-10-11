@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 import logging
-import re
 
 app = Flask(__name__)
 
@@ -16,41 +15,40 @@ def mpesa_callback():
     data = request.json
     app.logger.info("Received M-Pesa Callback: %s", data)
 
-    # Extract details from the callback message (replace with actual payload keys if needed)
-    message = data.get('message', '')  # assuming 'message' contains the transaction details
-    transaction_id = extract_transaction_id(message)
+    # Extract details from the callback
+    transaction_reference = data.get('Transaction_Reference')  # Adjusted to use 'Transaction_Reference'
     user_id = data.get('user_id')  # Adjust according to actual payload structure
     amount = data.get('amount')  # Adjust according to actual payload structure
     timestamp = data.get('timestamp')  # Adjust according to actual payload structure
 
-    if not transaction_id or not user_id or not amount:
+    if not transaction_reference or not user_id or not amount:
         app.logger.error("Invalid callback data: %s", data)
         return jsonify({"status": "error", "message": "Invalid data"}), 400
 
     # Store the transaction
-    transactions[transaction_id] = {
+    transactions[transaction_reference] = {
         "user_id": user_id,
         "amount": amount,
         "status": "confirmed",
         "timestamp": timestamp
     }
 
-    app.logger.info("Transaction stored: %s", transactions[transaction_id])
+    app.logger.info("Transaction stored: %s", transactions[transaction_reference])
     return jsonify({"status": "success"}), 200
 
 # Verification endpoint
 @app.route('/verify_transaction', methods=['POST'])
 def verify_transaction():
     data = request.json
-    transaction_id = data.get('transaction_id')
+    transaction_reference = data.get('transaction_reference')  # Adjusted to match callback reference
 
-    app.logger.info("Verification request received for Transaction ID: %s", transaction_id)
+    app.logger.info("Verification request received for Transaction Reference: %s", transaction_reference)
 
-    # Check if transaction ID is valid
-    if transaction_id in transactions:
-        transaction_details = transactions[transaction_id]
+    # Check if transaction reference is valid
+    if transaction_reference in transactions:
+        transaction_details = transactions[transaction_reference]
         response_message = {
-            "transaction_id": transaction_id,
+            "transaction_reference": transaction_reference,
             "user_id": transaction_details["user_id"],
             "status": transaction_details["status"],
             "amount": transaction_details["amount"],
@@ -58,16 +56,10 @@ def verify_transaction():
         }
         app.logger.info("Transaction verified: %s", response_message)
     else:
-        response_message = {"error": "Invalid Transaction ID"}
-        app.logger.warning("Transaction ID not found: %s", transaction_id)
+        response_message = {"error": "Invalid Transaction Reference"}
+        app.logger.warning("Transaction reference not found: %s", transaction_reference)
 
     return jsonify(response_message), 200
-
-# Helper function to extract transaction ID from message
-def extract_transaction_id(message):
-    # Use regex to extract the transaction ID (assuming it follows a similar pattern to SJC7RUCLTD)
-    match = re.search(r'\b[A-Z0-9]{10}\b', message)  # Modify the regex if needed
-    return match.group(0) if match else None
 
 if __name__ == '__main__':
     app.run(debug=True)
