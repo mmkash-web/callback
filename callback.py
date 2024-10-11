@@ -1,51 +1,49 @@
-from flask import Flask, request, jsonify
 import logging
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-app = Flask(__name__)
-
-# Store transactions in memory for this example
-transactions = {}
+# Constants
+FLASK_API_BASE_URL = "https://callback1-21e1c9a49f0d.herokuapp.com"  # Update with your actual Flask API URL
+API_TOKEN = "7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ"  # Replace with your actual Telegram Bot API token
 
 # Setup basic logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-@app.route('/billing/callback1', methods=['POST'])
-def handle_callback():
-    data = request.json
-    transaction_id = data.get("transaction_id")
-    payment_status = data.get("status")
-    payment_phone_number = data.get("phone_number")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome to Bingwa Sokoni data and SMS deals!")
 
-    # Log incoming data for debugging
-    logging.info(f"Received callback data: {data}")
+async def enter_mpesa_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    transaction_id = context.user_data.get("transaction_id")
+    user_phone_number = context.user_data.get("user_phone_number")
 
-    # Update the transaction status
-    if transaction_id in transactions:
-        transactions[transaction_id]["status"] = payment_status
-        transactions[transaction_id]["phone_number"] = payment_phone_number
-        logging.info(f"Updated transaction: {transactions[transaction_id]}")
+    # Check the payment status
+    payment_status, payment_phone_number = await check_payment_status(transaction_id)
+    if payment_status == "successful":
+        if payment_phone_number == user_phone_number:
+            await update.message.reply_text("Payment successful! Your order is confirmed.")
+        else:
+            await update.message.reply_text("Payment confirmed, but phone number does not match.")
     else:
-        logging.warning(f"Transaction ID {transaction_id} not found.")
+        await update.message.reply_text("Payment not successful yet. Please wait.")
 
-    return jsonify({"result": "Success"}), 200
-
-@app.route('/check_payment_status/<transaction_id>', methods=['GET'])
-def check_payment_status(transaction_id):
-    if transaction_id in transactions:
-        return jsonify(transactions[transaction_id]), 200
+async def check_payment_status(transaction_id):
+    response = requests.get(f"{FLASK_API_BASE_URL}/check_payment_status/{transaction_id}")
+    if response.status_code == 200:
+        data = response.json()
+        return data["status"], data["phone_number"]
     else:
-        return jsonify({"error": "Transaction not found"}), 404
+        logging.error(f"Failed to check payment status for transaction ID {transaction_id}. Response: {response.text}")
+        return None, None
 
-# Dummy endpoint to simulate transaction creation (for testing purposes)
-@app.route('/create_transaction', methods=['POST'])
-def create_transaction():
-    data = request.json
-    transaction_id = data.get("transaction_id")
-    transactions[transaction_id] = {
-        "status": "pending",
-        "phone_number": data.get("phone_number"),
-    }
-    return jsonify({"result": "Transaction created", "transaction_id": transaction_id}), 201
+async def main():
+    application = ApplicationBuilder().token(API_TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, enter_mpesa_confirmation))
+
+    await application.run_polling()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    import asyncio
+    asyncio.run(main())
