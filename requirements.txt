@@ -1,1 +1,4 @@
-pip freeze > requirements.txt
+Flask==2.2.3
+Werkzeug==2.2.3
+python-telegram-bot==20.0  # Check for the latest compatible version
+
