@@ -3,3 +3,5 @@ Werkzeug==2.2.3
 python-telegram-bot==20.0
 gunicorn==20.1.0  # Or the latest version
 pip freeze > requirements.txt
+requests==2.28.1
+gunicorn==20.1.0
