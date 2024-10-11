@@ -1,55 +1,51 @@
 from flask import Flask, request, jsonify
+import logging
 
 app = Flask(__name__)
 
-# Sample transaction status storage
+# Store transactions in memory for this example
 transactions = {}
 
-# Route for receiving the STK push callback
+# Setup basic logging
+logging.basicConfig(level=logging.INFO)
+
 @app.route('/billing/callback1', methods=['POST'])
 def handle_callback():
-    # Get the data sent by M-Pesa (or PayHero)
     data = request.json
     transaction_id = data.get("transaction_id")
     payment_status = data.get("status")
     payment_phone_number = data.get("phone_number")
 
+    # Log incoming data for debugging
+    logging.info(f"Received callback data: {data}")
+
     # Update the transaction status
     if transaction_id in transactions:
         transactions[transaction_id]["status"] = payment_status
         transactions[transaction_id]["phone_number"] = payment_phone_number
+        logging.info(f"Updated transaction: {transactions[transaction_id]}")
+    else:
+        logging.warning(f"Transaction ID {transaction_id} not found.")
 
     return jsonify({"result": "Success"}), 200
 
-
-# Route for initiating the STK push (this would be called by the bot)
-@app.route('/initiate_stk_push', methods=['POST'])
-def initiate_stk_push():
-    # This is where you initiate the STK push request using the PayHero API or Daraja
-    request_data = request.json
-
-    # Simulate initiating STK push and store in transactions
-    transaction_id = request_data.get("transaction_id")
-    user_phone_number = request_data.get("phone_number")
-
-    # Store the transaction details
-    transactions[transaction_id] = {"status": "pending", "phone_number": user_phone_number}
-
-    # Respond to the bot with the transaction details
-    return jsonify({"transaction_id": transaction_id, "status": "pending"}), 200
-
-
-# Route for checking payment status (this would be called by the bot)
 @app.route('/check_payment_status/<transaction_id>', methods=['GET'])
 def check_payment_status(transaction_id):
-    # Retrieve the transaction details
     if transaction_id in transactions:
-        status = transactions[transaction_id]["status"]
-        phone_number = transactions[transaction_id]["phone_number"]
-        return jsonify({"status": status, "phone_number": phone_number})
+        return jsonify(transactions[transaction_id]), 200
     else:
         return jsonify({"error": "Transaction not found"}), 404
 
+# Dummy endpoint to simulate transaction creation (for testing purposes)
+@app.route('/create_transaction', methods=['POST'])
+def create_transaction():
+    data = request.json
+    transaction_id = data.get("transaction_id")
+    transactions[transaction_id] = {
+        "status": "pending",
+        "phone_number": data.get("phone_number"),
+    }
+    return jsonify({"result": "Transaction created", "transaction_id": transaction_id}), 201
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
