@@ -47,13 +47,16 @@ def notify_user(transaction_id, status):
     if user_id:
         try:
             bot.send_message(chat_id=user_id, text=f"Payment successful for transaction ID: {transaction_id}")
+            logging.info(f"Notification sent to user {user_id}: Payment successful for transaction ID: {transaction_id}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
 
 def get_user_id_from_transaction(transaction_id):
     # Implement logic to retrieve user_id associated with the transaction_id
+    # This could involve a database lookup or other means of identifying the user.
+    # Example return for demonstration
     return 12345678  # Replace with actual user ID retrieval logic
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # Use PORT environment variable provided by Heroku
-    app.run(host='0.0.0.0', port=port)  # Bind to all IPs
+    app.run(host='0.0.0.0', port=port)  # Bind to all available IP addresses
