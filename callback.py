@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import logging
 from telegram import Bot
+import asyncio
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +24,7 @@ def payment_callback():
             payment_status = data['response'].get('Status')
 
             if payment_status == "Success":
-                notify_user(transaction_reference, data['response'])
+                asyncio.run(notify_user(transaction_reference, data['response']))
             else:
                 logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
             return jsonify({"status": "success"}), 200
@@ -35,7 +36,7 @@ def payment_callback():
             payment_status = data['response'].get('Payment_Method')
 
             if payment_status == "MPESA":
-                notify_user(transaction_reference, data['response'])
+                asyncio.run(notify_user(transaction_reference, data['response']))
             else:
                 logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
             return jsonify({"status": "success"}), 200
@@ -48,14 +49,14 @@ def payment_callback():
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-def notify_user(transaction_reference, response):
+async def notify_user(transaction_reference, response):
     external_reference = response.get('ExternalReference')  # Using ExternalReference for user ID mapping
     user_id = get_user_id_from_transaction(external_reference)
     logging.info(f"Attempting to notify user with ID: {user_id} for transaction: {transaction_reference}")
 
     if user_id:
         try:
-            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
+            await bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
     else:
@@ -65,7 +66,7 @@ def get_user_id_from_transaction(external_reference):
     # Replace this with your logic to find the user ID based on external_reference
     user_id_mapping = {
         'INV-009': 12345678,  # Example mapping for an external reference
-        'SJB5RNLYRN': 87654321,  # Add mapping for the specific transaction
+        'SJB4RNZZS6': 87654321,  # Add mapping for the specific transaction
         # Add more mappings as needed
     }
     return user_id_mapping.get(external_reference)
