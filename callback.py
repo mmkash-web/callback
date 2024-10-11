@@ -33,8 +33,8 @@ def payment_callback():
             return jsonify({"status": "error", "message": "Missing transaction reference or status"}), 400
 
         # Process payment confirmation
-        if payment_status.lower() in ["success", "complete"]:  # Adjust based on your actual data
-            notify_user(transaction_reference, payment_status)
+        if payment_status.lower() in ["success", "complete"]:
+            notify_user(transaction_reference, payment_status, amount)
             logging.info(f"Payment processed for transaction reference: {transaction_reference}, amount: {amount}")
         else:
             logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
@@ -45,13 +45,16 @@ def payment_callback():
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-def notify_user(transaction_reference, status):
+def notify_user(transaction_reference, status, amount):
     user_id = get_user_id_from_transaction(transaction_reference)
     logging.info(f"Attempting to notify user with ID: {user_id} for transaction: {transaction_reference}")
 
     if user_id:
         try:
-            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
+            # Send a more detailed message to Telegram
+            message = f"Payment successful for transaction reference: {transaction_reference}\nAmount: {amount} KES\nStatus: {status}"
+            bot.send_message(chat_id=user_id, text=message)
+            logging.info(f"Message sent to user ID {user_id}: {message}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
     else:
@@ -59,7 +62,6 @@ def notify_user(transaction_reference, status):
 
 def get_user_id_from_transaction(transaction_reference):
     # Replace this with your logic to find the user ID based on transaction_reference
-    # This can be a database lookup or a mapping stored in memory
     user_id_mapping = {
         'INV-009': 12345678,  # Example mapping
         # Add more mappings as needed
