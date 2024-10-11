@@ -21,7 +21,7 @@ links = load_links()
 def send_notification_to_telegram(transaction_id, phone_number):
     """Send a notification to Telegram about the successful payment."""
     bot_token = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'  # Replace with your bot token
-    chat_id = '<YOUR_CHAT_ID>'  # Replace with your chat ID
+    chat_id = '<1870796520>'  # Replace with your chat ID
     message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPhone Number: {phone_number}"
     
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -39,12 +39,13 @@ def send_notification_to_telegram(transaction_id, phone_number):
 @app.route('/billing/callback1', methods=['POST'])
 def handle_payment_callback():
     """Handle payment confirmation callback from PayHero."""
-    # Log the incoming request method
     logger.info(f"Received {request.method} request on /billing/callback1")
-    
+
     try:
         # Parse the incoming JSON payload
         data = request.json
+        logger.info(f"Incoming JSON data: {data}")  # Log incoming JSON data
+        
         transaction_id = data.get('transaction_id')
         status = data.get('status')
         phone_number = data.get('phone_number')
@@ -52,8 +53,7 @@ def handle_payment_callback():
         # Log the payment details
         logger.info(f"Payment Callback Received: Transaction ID: {transaction_id}, Status: {status}, Phone Number: {phone_number}")
 
-        if status == "successful":
-            # Notify your Telegram bot
+        if status == "successful":  # Ensure this matches the actual status value
             send_notification_to_telegram(transaction_id, phone_number)
             return jsonify({"message": "Payment processed successfully."}), 200
         else:
@@ -64,4 +64,7 @@ def handle_payment_callback():
         return jsonify({"message": "Error processing payment."}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=49480)  # Change port as necessary for your environment
+    app.run(host='0.0.0.0', port=5000)  # Adjust the port as needed
+
+
+    
