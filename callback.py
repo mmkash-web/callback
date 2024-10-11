@@ -1,66 +1,80 @@
-from flask import Flask, request, jsonify
-import logging
-import json
+from flask import Flask, request
 import requests
+import json
+import os
 
 app = Flask(__name__)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Telegram bot token
+TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
+CHAT_ID = 'YOUR_CHAT_ID'  # Optional, for initial testing or admin notifications
 
-# Load file links from JSON
-def load_links():
-    """Load file links from links.json."""
-    with open('links.json', 'r') as file:
-        return json.load(file)
+# Create or load the user chat IDs and transaction mapping
+def load_mapping():
+    if os.path.exists('user_mapping.json'):
+        with open('user_mapping.json', 'r') as f:
+            return json.load(f)
+    return {}
 
-links = load_links()
+def save_mapping(mapping):
+    with open('user_mapping.json', 'w') as f:
+        json.dump(mapping, f)
 
-# Function to send a message to your Telegram bot
-def send_notification_to_telegram(transaction_id, phone_number):
-    """Send a notification to Telegram about the successful payment."""
-    bot_token = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'  # Replace with your bot token
-    chat_id = '1870796520'  # Your chat ID
+# Store user transaction details when they initiate a purchase
+def store_user_transaction(chat_id, transaction_id):
+    mapping = load_mapping()
+    mapping[transaction_id] = chat_id
+    save_mapping(mapping)
+
+# Send a notification to Telegram
+def send_notification_to_telegram(chat_id, transaction_id, phone_number):
     message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPhone Number: {phone_number}"
-    
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    data = {
         'chat_id': chat_id,
         'text': message
     }
-    
-    try:
-        response = requests.post(url, json=payload)
-        logger.info(f"Telegram notification sent: {response.json()}")
-    except Exception as e:
-        logger.error(f"Failed to send Telegram notification: {e}")
+    response = requests.post(url, data=data)
+    return response.json()
 
+# Endpoint for handling incoming payments
 @app.route('/billing/callback1', methods=['POST'])
-def handle_payment_callback():
-    """Handle payment confirmation callback from PayHero."""
-    try:
-        # Parse the incoming JSON payload
-        data = request.json
-        # Extract the required information
-        response = data.get('response', {})
-        transaction_id = response.get('MPESA_Reference')  # Use MPESA_Reference as transaction ID
-        phone_number = response.get('Source')  # Use Source as phone number
-        status = data.get('status')
+def callback():
+    data = request.json
+    app.logger.info("Incoming JSON data: %s", data)
 
-        # Log the payment details
-        logger.info(f"Payment Callback Received: Transaction ID: {transaction_id}, Status: {status}, Phone Number: {phone_number}")
+    # Extract payment details from the JSON data
+    transaction_id = data.get('response', {}).get('Transaction_Reference')
+    phone_number = data.get('response', {}).get('Source')
+    status = data.get('status')
 
-        if status:
-            # Notify your Telegram bot
-            send_notification_to_telegram(transaction_id, phone_number)
-            return jsonify({"message": "Payment processed successfully."}), 200
+    app.logger.info("Payment Callback Received: Transaction ID: %s, Status: %s, Phone Number: %s", transaction_id, status, phone_number)
+
+    # Load mapping to get user chat ID
+    mapping = load_mapping()
+    chat_id = mapping.get(transaction_id)
+
+    if status:
+        if chat_id:
+            send_notification_to_telegram(chat_id, transaction_id, phone_number)
         else:
-            logger.warning(f"Payment not successful for Transaction ID: {transaction_id}")
-            return jsonify({"message": "Payment not successful."}), 400
-    except Exception as e:
-        logger.error(f"Error handling payment callback: {e}")
-        return jsonify({"message": "Error processing payment."}), 500
+            app.logger.warning("No chat ID found for Transaction ID: %s", transaction_id)
+        return "Payment processed successfully", 200
+    else:
+        app.logger.warning("Payment not successful for Transaction ID: %s", transaction_id)
+        return "Payment processing failed", 400
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)  # Change port as needed
+# Example function to initiate a purchase and store user transaction
+def initiate_purchase(chat_id, transaction_id):
+    # Your existing purchase logic here...
+    
+    # Store user transaction details
+    store_user_transaction(chat_id, transaction_id)
+
+    # Continue with the purchase process...
+    # For example, send the user a message confirming the purchase initiation
+    message = "Your purchase has been initiated."
+    send_notification_to_telegram(chat_id, "Transaction initiated", message)
+
+if __name__ == "__main__":
+    app.run(port=5000)
