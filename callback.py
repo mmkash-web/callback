@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify
 import logging
 import os
@@ -15,7 +16,7 @@ if not TELEGRAM_BOT_TOKEN:
 
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-@app.route('/billing/callbackurl.php', methods=['POST'])
+@app.route('/billing/callback1', methods=['POST'])  # Ensure this matches your callback URL
 def payment_callback():
     try:
         # Get JSON data from PayHero
