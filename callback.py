@@ -7,8 +7,12 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Replace with your actual Telegram bot token
-TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
+TELEGRAM_BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
+
+@app.route('/')
+def index():
+    return "Welcome to the M-Pesa Payment Callback API!"
 
 @app.route('/billing/callback1', methods=['POST'])
 def payment_callback():
