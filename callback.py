@@ -6,7 +6,7 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
 # Replace with your actual Telegram bot token
-TELEGRAM_BOT_TOKEN = '7626726530:AAHnNs51Ew8_lZEnD0VLXkAJBvpAVyRzLig'
+TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
 @app.route('/billing/callback1', methods=['POST'])
