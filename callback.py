@@ -1,8 +1,8 @@
-
 from flask import Flask, request, jsonify
 import logging
 import os
 from telegram import Bot
+import asyncio
 
 app = Flask(__name__)
 
@@ -34,7 +34,7 @@ def payment_callback():
 
         # Process payment confirmation
         if payment_status == "complete":
-            notify_user(transaction_reference, payment_status)
+            asyncio.run(notify_user(transaction_reference, payment_status))
         else:
             logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
 
@@ -43,12 +43,12 @@ def payment_callback():
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-def notify_user(transaction_reference, status):
+async def notify_user(transaction_reference, status):
     # Your logic to notify the user on Telegram about the successful payment
     user_id = get_user_id_from_transaction(transaction_reference)  # Implement this function
     if user_id:
         try:
-            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
+            await bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
 
