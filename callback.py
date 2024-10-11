@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 import logging
-import json
 
 app = Flask(__name__)
 
@@ -17,18 +16,24 @@ def mpesa_callback():
     app.logger.info("Received M-Pesa Callback: %s", data)
 
     # Extract details from the callback
-    transaction_id = data.get('transaction_id')  # Example key, adjust as per your payload
-    user_id = data.get('user_id')  # Example key, adjust as per your payload
-    amount = data.get('amount')  # Example key, adjust as per your payload
+    transaction_id = data.get('transaction_id')  # Adjust according to actual payload structure
+    user_id = data.get('user_id')  # Adjust according to actual payload structure
+    amount = data.get('amount')  # Adjust according to actual payload structure
+    timestamp = data.get('timestamp')  # Adjust according to actual payload structure
 
-    # Store the transaction (you may want to adjust this based on your data structure)
+    if not transaction_id or not user_id or not amount:
+        app.logger.error("Invalid callback data: %s", data)
+        return jsonify({"status": "error", "message": "Invalid data"}), 400
+
+    # Store the transaction
     transactions[transaction_id] = {
         "user_id": user_id,
         "amount": amount,
         "status": "confirmed",
-        "timestamp": data.get('timestamp')  # Example key, adjust as per your payload
+        "timestamp": timestamp
     }
 
+    app.logger.info("Transaction stored: %s", transactions[transaction_id])
     return jsonify({"status": "success"}), 200
 
 # Verification endpoint
@@ -49,8 +54,10 @@ def verify_transaction():
             "amount": transaction_details["amount"],
             "timestamp": transaction_details["timestamp"]
         }
+        app.logger.info("Transaction verified: %s", response_message)
     else:
         response_message = {"error": "Invalid Transaction ID"}
+        app.logger.warning("Transaction ID not found: %s", transaction_id)
 
     return jsonify(response_message), 200
 
