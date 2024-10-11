@@ -5,19 +5,18 @@ import json
 app = Flask(__name__)
 
 # Load existing mappings from JSON files
-def load_user_mapping():
+def load_transactions():
     try:
-        with open('user_mapping.json', 'r') as f:
+        with open('transactions.json', 'r') as f:
             return json.load(f)
     except FileNotFoundError:
         return {}
 
-def load_http_links():
-    try:
-        with open('http_links.json', 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
+def save_transaction(transaction_id, transaction_data):
+    transactions = load_transactions()
+    transactions[transaction_id] = transaction_data
+    with open('transactions.json', 'w') as f:
+        json.dump(transactions, f)
 
 # Send message via Telegram bot
 def send_message(chat_id, message):
@@ -40,25 +39,20 @@ def callback():
 
     app.logger.info("Payment Callback Received: Transaction ID: %s, Status: %s", transaction_id, status)
 
-    # Load user mapping and HTTP links
-    user_mapping = load_user_mapping()
-    http_links = load_http_links()
+    if status:  # Only store successful transactions
+        transaction_data = {
+            "user_id": user_id,
+            "status": status,
+            "amount": data.get('response', {}).get('Amount'),
+            "timestamp": data.get('response', {}).get('Transaction_Date')
+        }
+        save_transaction(transaction_id, transaction_data)  # Save transaction
+        message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPlease verify your transaction by sending this ID."
+        
+        # Optionally send a message to the user (assuming you have a way to get chat_id)
+        # chat_id = user_mapping.get(user_id)  # Implement user mapping if needed
+        # send_message(chat_id, message)
 
-    if status:
-        # Associate the transaction ID with the user ID and HTTP Injector link
-        chat_id = user_mapping.get(user_id)
-        if chat_id:
-            # Store the transaction ID and corresponding HTTP link
-            http_links[transaction_id] = "<HTTP_INJECTOR_LINK>"  # Replace with actual link
-            user_mapping[transaction_id] = chat_id
-            with open('user_mapping.json', 'w') as f:
-                json.dump(user_mapping, f)
-            with open('http_links.json', 'w') as f:
-                json.dump(http_links, f)
-            message = f"Payment Successful!\nTransaction ID: {transaction_id}\nPlease verify your transaction by sending this ID."
-            send_message(chat_id, message)
-        else:
-            app.logger.warning("No chat ID found for user ID: %s", user_id)
     else:
         app.logger.warning("Payment not successful for Transaction ID: %s", transaction_id)
 
@@ -69,21 +63,24 @@ def callback():
 def verify_transaction():
     data = request.json
     transaction_id = data.get('transaction_id')
-    chat_id = data.get('chat_id')
 
     app.logger.info("Verification request received for Transaction ID: %s", transaction_id)
 
-    # Load HTTP links
-    http_links = load_http_links()
+    # Load transactions
+    transactions = load_transactions()
 
     # Check if transaction ID is valid
-    if transaction_id in http_links:
-        injector_link = http_links[transaction_id]
-        send_message(chat_id, f"Your HTTP Injector Link: {injector_link}")
+    if transaction_id in transactions:
+        transaction_details = transactions[transaction_id]
+        response_message = (f"Transaction ID: {transaction_id}\n"
+                            f"User ID: {transaction_details['user_id']}\n"
+                            f"Status: {transaction_details['status']}\n"
+                            f"Amount: {transaction_details['amount']}\n"
+                            f"Timestamp: {transaction_details['timestamp']}")
     else:
-        send_message(chat_id, "Invalid Transaction ID. Please try again.")
+        response_message = "Invalid Transaction ID. Please try again."
 
-    return jsonify({"status": "verified"}), 200
+    return jsonify({"status": "verified", "message": response_message}), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
