@@ -1,49 +1,72 @@
+from flask import Flask, request, jsonify
 import logging
-import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram import Bot
 
-# Constants
-FLASK_API_BASE_URL = "https://callback1-21e1c9a49f0d.herokuapp.com"  # Update with your actual Flask API URL
-API_TOKEN = "7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ"  # Replace with your actual Telegram Bot API token
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
-# Setup basic logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Replace with your actual Telegram bot token
+TELEGRAM_BOT_TOKEN = '7480076460:AAGieUKKaivtNGoMDSVKeMBuMOICJ9IKJgQ'
+bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Welcome to Bingwa Sokoni data and SMS deals!")
+@app.route('/billing/callback1', methods=['POST'])
+def payment_callback():
+    try:
+        # Get JSON data from the callback
+        data = request.get_json()
+        logging.info(f"Received callback data: {data}")
 
-async def enter_mpesa_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    transaction_id = context.user_data.get("transaction_id")
-    user_phone_number = context.user_data.get("user_phone_number")
+        # Check if the response contains M-Pesa Express data
+        if 'response' in data and 'MpesaReceiptNumber' in data['response']:
+            amount = data['response'].get('Amount', 0)
+            transaction_reference = data['response'].get('MpesaReceiptNumber')
+            payment_status = data['response'].get('Status')
 
-    # Check the payment status
-    payment_status, payment_phone_number = await check_payment_status(transaction_id)
-    if payment_status == "successful":
-        if payment_phone_number == user_phone_number:
-            await update.message.reply_text("Payment successful! Your order is confirmed.")
+            if payment_status == "Success":
+                notify_user(transaction_reference, payment_status)
+            else:
+                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
+            return jsonify({"status": "success"}), 200
+        
+        # Check for WooCommerce/Custom callback data
+        elif 'response' in data and 'MPESA_Reference' in data['response']:
+            amount = data['response'].get('Amount', 0)
+            transaction_reference = data['response'].get('MPESA_Reference')
+            payment_status = data['response'].get('Payment_Method')
+
+            if payment_status == "MPESA":
+                notify_user(transaction_reference, payment_status)
+            else:
+                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
+            return jsonify({"status": "success"}), 200
+
         else:
-            await update.message.reply_text("Payment confirmed, but phone number does not match.")
+            logging.error("Invalid callback data format")
+            return jsonify({"status": "error", "message": "Invalid format"}), 400
+
+    except Exception as e:
+        logging.error(f"Error processing callback: {e}")
+        return jsonify({"status": "error", "message": "Internal server error"}), 500
+
+def notify_user(transaction_reference, status):
+    user_id = get_user_id_from_transaction(transaction_reference)
+    logging.info(f"Attempting to notify user with ID: {user_id} for transaction: {transaction_reference}")
+
+    if user_id:
+        try:
+            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
+        except Exception as e:
+            logging.error(f"Failed to send message: {e}")
     else:
-        await update.message.reply_text("Payment not successful yet. Please wait.")
+        logging.error(f"No user ID found for transaction reference: {transaction_reference}")
 
-async def check_payment_status(transaction_id):
-    response = requests.get(f"{FLASK_API_BASE_URL}/check_payment_status/{transaction_id}")
-    if response.status_code == 200:
-        data = response.json()
-        return data["status"], data["phone_number"]
-    else:
-        logging.error(f"Failed to check payment status for transaction ID {transaction_id}. Response: {response.text}")
-        return None, None
-
-async def main():
-    application = ApplicationBuilder().token(API_TOKEN).build()
-
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, enter_mpesa_confirmation))
-
-    await application.run_polling()
+def get_user_id_from_transaction(transaction_reference):
+    # Replace this with your logic to find the user ID based on transaction_reference
+    user_id_mapping = {
+        'INV-009': 12345678,  # Example mapping
+        # Add more mappings as needed
+    }
+    return user_id_mapping.get(transaction_reference)
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    app.run(debug=True)
