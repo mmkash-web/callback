@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify
 import logging
 import os
@@ -23,40 +24,38 @@ def payment_callback():
         logging.info(f"Received callback data: {data}")
 
         # Validate the incoming data structure
-        if 'transaction_id' not in data or 'status' not in data:
+        if 'response' not in data or 'Amount' not in data['response'] or 'Transaction_Reference' not in data['response']:
             logging.error("Invalid callback data format")
             return jsonify({"status": "error", "message": "Invalid format"}), 400
 
-        transaction_id = data['transaction_id']
-        status = data['status']
+        amount = data['response']['Amount']
+        transaction_reference = data['response']['Transaction_Reference']
+        payment_status = data['response'].get('woocommerce_payment_status', 'unknown')  # Adjust as needed
 
         # Process payment confirmation
-        if status == "success":
-            notify_user(transaction_id, status)
+        if payment_status == "complete":
+            notify_user(transaction_reference, payment_status)
         else:
-            logging.warning(f"Payment failed for transaction ID: {transaction_id}")
+            logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
 
         return jsonify({"status": "success"}), 200
     except Exception as e:
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
-def notify_user(transaction_id, status):
+def notify_user(transaction_reference, status):
     # Your logic to notify the user on Telegram about the successful payment
-    user_id = get_user_id_from_transaction(transaction_id)  # Implement this function
+    user_id = get_user_id_from_transaction(transaction_reference)  # Implement this function
     if user_id:
         try:
-            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction ID: {transaction_id}")
-            logging.info(f"Notification sent to user {user_id}: Payment successful for transaction ID: {transaction_id}")
+            bot.send_message(chat_id=user_id, text=f"Payment successful for transaction reference: {transaction_reference}")
         except Exception as e:
             logging.error(f"Failed to send message: {e}")
 
-def get_user_id_from_transaction(transaction_id):
-    # Implement logic to retrieve user_id associated with the transaction_id
-    # This could involve a database lookup or other means of identifying the user.
-    # Example return for demonstration
+def get_user_id_from_transaction(transaction_reference):
+    # Implement logic to retrieve user_id associated with the transaction_reference
     return 12345678  # Replace with actual user ID retrieval logic
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # Use PORT environment variable provided by Heroku
-    app.run(host='0.0.0.0', port=port)  # Bind to all available IP addresses
+    app.run(host='0.0.0.0', port=port)  # Bind to all interfaces
