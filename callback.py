@@ -9,29 +9,41 @@ logging.basicConfig(level=logging.INFO)
 TELEGRAM_BOT_TOKEN = '7626726530:AAHnNs51Ew8_lZEnD0VLXkAJBvpAVyRzLig'
 bot = Bot(token=TELEGRAM_BOT_TOKEN)
 
-@app.route('/billing/callback1', methods=['POST'])  # Ensure this matches your callback URL
+@app.route('/billing/callback1', methods=['POST'])
 def payment_callback():
     try:
-        # Get JSON data from M-Pesa callback
+        # Get JSON data from the callback
         data = request.get_json()
         logging.info(f"Received callback data: {data}")
 
-        # Validate the incoming data structure
-        if 'response' not in data or 'Status' not in data['response']:
+        # Check if the response contains M-Pesa Express data
+        if 'response' in data and 'MpesaReceiptNumber' in data['response']:
+            amount = data['response'].get('Amount', 0)
+            transaction_reference = data['response'].get('MpesaReceiptNumber')
+            payment_status = data['response'].get('Status')
+
+            if payment_status == "Success":
+                notify_user(transaction_reference, payment_status)
+            else:
+                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
+            return jsonify({"status": "success"}), 200
+        
+        # Check for WooCommerce/Custom callback data
+        elif 'response' in data and 'MPESA_Reference' in data['response']:
+            amount = data['response'].get('Amount', 0)
+            transaction_reference = data['response'].get('MPESA_Reference')
+            payment_status = data['response'].get('Payment_Method')
+
+            if payment_status == "MPESA":
+                notify_user(transaction_reference, payment_status)
+            else:
+                logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
+            return jsonify({"status": "success"}), 200
+
+        else:
             logging.error("Invalid callback data format")
             return jsonify({"status": "error", "message": "Invalid format"}), 400
 
-        amount = data['response'].get('Amount', 0)
-        transaction_reference = data['response'].get('Transaction_Reference')
-        payment_status = data['response'].get('Payment_Method')  # Change as needed based on your needs
-
-        # Process payment confirmation
-        if payment_status == "MPESA":
-            notify_user(transaction_reference, payment_status)
-        else:
-            logging.warning(f"Payment not completed for transaction reference: {transaction_reference}")
-
-        return jsonify({"status": "success"}), 200
     except Exception as e:
         logging.error(f"Error processing callback: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
@@ -50,7 +62,6 @@ def notify_user(transaction_reference, status):
 
 def get_user_id_from_transaction(transaction_reference):
     # Replace this with your logic to find the user ID based on transaction_reference
-    # This can be a database lookup or a mapping stored in memory
     user_id_mapping = {
         'INV-009': 12345678,  # Example mapping
         # Add more mappings as needed
