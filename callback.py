@@ -1,30 +1,27 @@
 from flask import Flask, request, jsonify
+import logging
 
 app = Flask(__name__)
 
-# Sample in-memory transaction data (replace this with your actual data source)
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+# Simulated transaction data for demonstration purposes
 transaction_data = {
     "INV-009": {"status": "confirmed"},
-    # Add other transaction references as needed
+    # Add more transactions as needed
 }
 
-@app.route('/billing/callback', methods=['POST'])
-def handle_callback():
-    """Handle incoming M-Pesa confirmation messages."""
-    data = request.json
-    transaction_reference = data.get("transaction_reference")
-    mpesa_confirmation_message = data.get("mpesa_confirmation_message")
-
-    if transaction_reference and mpesa_confirmation_message:
-        # Process the callback message as needed
-        return jsonify({"message": "Callback received", "data": data}), 200
-    else:
-        return jsonify({"error": "Missing parameters"}), 400
+@app.route('/')
+def home():
+    return "Welcome to the M-Pesa Callback Handler!"
 
 @app.route('/billing/callback1', methods=['POST'])
 def handle_billing_callback():
     """Handle incoming M-Pesa confirmation messages for billing."""
     data = request.json
+    app.logger.info(f"Received data: {data}")  # Log the incoming data
+
     transaction_reference = data.get("transaction_reference")
     mpesa_confirmation_message = data.get("mpesa_confirmation_message")
 
