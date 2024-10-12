@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify
 import logging
 
@@ -8,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 
 def is_valid_mpesa_confirmation(mpesa_message: str) -> bool:
     """Validate if the M-Pesa confirmation message is in a valid format."""
-    return "Confirmed" in mpesa_message and "Ksh" in mpesa_message
+    return "Confirmed" in mpesa_message and "paid to" in mpesa_message
 
 @app.route('/verify', methods=['GET'])
 def verify_transaction():
@@ -36,9 +37,14 @@ def parse_mpesa_message(mpesa_message: str):
     # Split the message by "paid to" to extract details
     try:
         parts = mpesa_message.split("paid to")
+        if len(parts) < 2:
+            raise ValueError("Invalid M-Pesa message format")
+
+        # Extract the amount and payee details
         amount_and_details = parts[0].strip()
         payee_and_time = parts[1].strip().split("on")
         
+        # Extracting amount
         amount = amount_and_details.split(" ")[1]  # Ksh amount
         payee = payee_and_time[0].strip()  # Payee name
         timestamp = payee_and_time[1].strip()  # Transaction time
