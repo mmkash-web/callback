@@ -1,89 +1,44 @@
 from flask import Flask, request, jsonify
-import requests
+import re
 import logging
 
 app = Flask(__name__)
-
-# Set up logging
 logging.basicConfig(level=logging.INFO)
-
-# Your Flask app URL for verification
-FLASK_APP_URL = "https://callback1-21e1c9a49f0d.herokuapp.com"
 
 @app.route('/billing/callback1', methods=['POST'])
 def mpesa_callback():
-    """Handle M-Pesa callback."""
     data = request.get_json()
-    app.logger.info("Received M-Pesa Callback: %s", data)
+    logging.info(f"Received data: {data}")
+
+    # Assuming 'Body' contains the confirmation message
+    confirmation_message = data.get('Body', {}).get('Callback', {}).get('Message', '')
     
-    # Validate the callback data
-    if not validate_mpesa_data(data):
-        app.logger.error("Invalid callback data: %s", data)
-        return jsonify({"error": "Invalid callback data"}), 400
+    # Parse the confirmation message
+    parsed_message = parse_mpesa_confirmation_message(confirmation_message)
 
-    # Extract necessary fields
-    transaction_id = data['response'].get('Transaction_Reference')
-    if transaction_id is None:
-        app.logger.error("Transaction Reference is missing: %s", data)
-        return jsonify({"error": "Transaction Reference missing"}), 400
-
-    mpesa_confirmation_message = data  # Store the entire message for verification
-
-    # Verify the transaction
-    if verify_transaction_with_flask(transaction_id, mpesa_confirmation_message):
-        app.logger.info("Transaction %s verified successfully.", transaction_id)
-        return jsonify({"status": "success"}), 200
+    if parsed_message:
+        transaction_id = parsed_message['transaction_id']
+        logging.info(f"Transaction ID {transaction_id} verified successfully.")
+        # Here, you can implement further logic to handle the transaction
+        return jsonify({'status': 'verified', 'transaction_id': transaction_id}), 200
     else:
-        app.logger.error("Transaction verification failed for %s.", transaction_id)
-        return jsonify({"status": "verification failed"}), 400
+        logging.error("Invalid M-Pesa confirmation message format.")
+        return jsonify({'status': 'error', 'message': 'Invalid M-Pesa confirmation message format.'}), 400
 
-def validate_mpesa_data(data):
-    """Validate incoming M-Pesa callback data."""
-    if 'response' in data:
-        if 'Transaction_Reference' in data['response']:
-            return True
-        else:
-            app.logger.error("Missing Transaction_Reference in response: %s", data)
+def parse_mpesa_confirmation_message(message):
+    # Regular expression to extract fields from the message
+    pattern = (r'(?P<transaction_id>\w+) Confirmed\. Ksh(?P<amount>[\d,]+\.\d{2}) paid to '
+               r'(?P<recipient>.+?) on (?P<date>\d{2}/\d{2}/\d{2}) at (?P<time>\d{1,2}:\d{2} [APM]{2})\. '
+               r'New M-PESA balance is Ksh(?P<new_balance>[\d,]+\.\d{2})\. '
+               r'Transaction cost, Ksh(?P<transaction_cost>[\d,]+\.\d{2})\. '
+               r'Amount you can transact within the day is (?P<daily_limit>[\d,]+\.\d{2})\. '
+               r'Download new M-PESA app on (?P<promotion_link>http[^\s]+)\s& get \d+MB FREE data\.')
+
+    match = re.match(pattern, message)
+    if match:
+        return match.groupdict()
     else:
-        app.logger.error("Missing response in callback data: %s", data)
-    return False
-
-def verify_transaction_with_flask(transaction_id: str, mpesa_confirmation_message: dict) -> bool:
-    """Verify the transaction with the Flask app."""
-    url = f"{FLASK_APP_URL}/verify"
-    payload = {
-        "transaction_id": transaction_id,
-        "confirmation_message": mpesa_confirmation_message
-    }
-    
-    app.logger.info("Sending verification request to Flask app: %s", payload)
-    
-    try:
-        response = requests.post(url, json=payload)
-        app.logger.info("Verification response from Flask app: %s", response.json())
-        
-        # Check if the verification was successful
-        if response.status_code == 200:
-            return True
-    except requests.exceptions.RequestException as e:
-        app.logger.error("Error during verification request: %s", e)
-    
-    return False
-
-@app.route('/verify', methods=['POST'])
-def verify_transaction():
-    """Verify the transaction."""
-    data = request.get_json()
-    app.logger.info("Verifying transaction data received: %s", data)
-
-    transaction_id = data.get("transaction_id")
-    if transaction_id:
-        # Here you would normally verify the transaction with your database or M-Pesa API
-        app.logger.info("Transaction ID %s verified successfully.", transaction_id)
-        return jsonify({"status": "verified", "transaction_id": transaction_id}), 200
-
-    app.logger.error("Transaction ID missing in received data: %s", data)
-    return jsonify({"error": "Transaction ID missing"}), 400
+        return None
 
 if __name__ == '__main__':
     app.run(debug=True)
