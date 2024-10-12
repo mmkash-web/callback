@@ -1,3 +1,4 @@
+import re
 from flask import Flask, request, jsonify
 import logging
 
@@ -5,57 +6,31 @@ app = Flask(__name__)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-
-def is_valid_mpesa_confirmation(mpesa_message: str) -> bool:
-    """Validate if the M-Pesa confirmation message is in a valid format."""
-    return "Confirmed" in mpesa_message and "paid to" in mpesa_message
+logger = logging.getLogger(__name__)
 
 @app.route('/verify', methods=['GET'])
-def verify_transaction():
-    """Verify if the transaction was successful based on the reference."""
-    mpesa_message = request.args.get('mpesa_message')
-    
-    # Log the received message for debugging
-    app.logger.info(f"Received M-Pesa message: {mpesa_message}")
-    
-    if is_valid_mpesa_confirmation(mpesa_message):
-        # Extract information from the message
-        try:
-            # Parse the M-Pesa message
-            transaction_details = parse_mpesa_message(mpesa_message)
-            return jsonify({"status": "valid", "message": "Transaction verified successfully.", "details": transaction_details}), 200
-        except Exception as e:
-            app.logger.error(f"Error parsing M-Pesa message: {str(e)}")
-            return jsonify({"status": "invalid", "message": "Error processing the transaction."}), 400
+def verify_mpesa_message():
+    # Extract the M-Pesa message from the query parameters
+    mpesa_message = request.args.get('mpesa_message', '')
+
+    if not mpesa_message:
+        logger.error("No M-Pesa message provided")
+        return jsonify({'error': 'No M-Pesa message provided'}), 400
+
+    logger.info(f"Received M-Pesa message: {mpesa_message}")
+
+    # Regex to extract the relevant information from the M-Pesa message
+    pattern = r"(?P<code>SJC[0-9]+) Confirmed\. Ksh(?P<amount>[0-9.]+) paid to (?P<recipient>.+?) on (?P<date>[0-9/]+) at (?P<time>[0-9: ]+)\. New M-PESA balance is Ksh(?P<balance>[0-9.]+)\. Transaction cost, Ksh(?P<cost>[0-9.]+)\."
+    match = re.match(pattern, mpesa_message)
+
+    if match:
+        details = match.groupdict()
+        logger.info(f"Parsed M-Pesa message details: {details}")
+        # You can process the details further as needed
+        return jsonify(details), 200
     else:
-        app.logger.warning("Invalid M-Pesa confirmation message.")
-        return jsonify({"status": "invalid", "message": "Invalid M-Pesa confirmation message."}), 400
-
-def parse_mpesa_message(mpesa_message: str):
-    """Parse the M-Pesa confirmation message and extract details."""
-    # Split the message by "paid to" to extract details
-    try:
-        parts = mpesa_message.split("paid to")
-        if len(parts) < 2:
-            raise ValueError("Invalid M-Pesa message format")
-
-        # Extract the amount and payee details
-        amount_and_details = parts[0].strip()
-        payee_and_time = parts[1].strip().split("on")
-        
-        # Extracting amount
-        amount = amount_and_details.split(" ")[1]  # Ksh amount
-        payee = payee_and_time[0].strip()  # Payee name
-        timestamp = payee_and_time[1].strip()  # Transaction time
-        
-        return {
-            "amount": amount,
-            "payee": payee,
-            "timestamp": timestamp
-        }
-    except Exception as e:
-        raise ValueError("Failed to parse M-Pesa message") from e
+        logger.error("Error parsing M-Pesa message: Failed to parse M-Pesa message")
+        return jsonify({'error': 'Failed to parse M-Pesa message'}), 400
 
 if __name__ == '__main__':
     app.run(debug=True)
-
