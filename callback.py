@@ -1,38 +1,49 @@
 from flask import Flask, request, jsonify
-import logging
+from pymongo import MongoClient
+from urllib.parse import quote_plus
+import os
 
 app = Flask(__name__)
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Replace these with your actual username and password
+username = quote_plus("admin@admin")  # URL-encode your username
+password = quote_plus("9kosc8pHZGqeS74nmt0B")  # URL-encode your password
+
+# MongoDB connection string (replace <username> and <password>)
+MONGODB_URI = f"mongodb://{username}:{password}@node1-f8ca9d4f542f00de.database.cloud.ovh.net,node2-f8ca9d4f542f00de.database.cloud.ovh.net,node3-f8ca9d4f542f00de.database.cloud.ovh.net/admin?replicaSet=replicaset&tls=true"
+client = MongoClient(MONGODB_URI)
+db = client['your_database_name']  # Replace with your actual database name
 
 @app.route('/billing/callback1', methods=['POST'])
 def callback():
-    try:
-        # Check if the request is form data
-        if request.method == 'POST':
-            data = request.form
-            logger.info(f"Request form: {data}")
+    # Get the JSON data from the request
+    data = request.json
+    
+    # Log the received data
+    app.logger.info(f'Received data: {data}')
+    
+    # Example of processing the data
+    if not data or 'mpesa_message' not in data:
+        return jsonify({'error': 'M-Pesa message is missing'}), 400
 
-            # Get the M-Pesa message from the request
-            mpesa_message = data.get('mpesa_message')
-            if not mpesa_message:
-                logger.error("M-Pesa message is missing in the request.")
-                return jsonify({"error": "M-Pesa message is missing"}), 400
+    mpesa_message = data['mpesa_message']
+    
+    # Save the message to the MongoDB collection
+    db.messages.insert_one({'message': mpesa_message})
+    
+    return jsonify({'message': 'Callback received successfully'}), 200
 
-            # Process the message (you can add your logic here)
-            logger.info(f"Received M-Pesa message: {mpesa_message}")
+@app.route('/verify', methods=['GET'])
+def verify():
+    mpesa_message = request.args.get('mpesa_message')
+    
+    # Log the received M-Pesa message
+    app.logger.info(f'Verifying M-Pesa message: {mpesa_message}')
+    
+    if not mpesa_message:
+        return jsonify({'error': 'M-Pesa message is missing in the request.'}), 400
 
-            # Example: Respond with success
-            return jsonify({"status": "success", "message": "Callback processed"}), 200
-        else:
-            logger.error("Invalid request method.")
-            return jsonify({"error": "Invalid request method"}), 405
-    except Exception as e:
-        logger.error(f"Error processing request: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+    return jsonify({'status': 'Message verified successfully', 'message': mpesa_message}), 200
 
 if __name__ == '__main__':
-    # Start the Flask application
-    app.run(host='0.0.0.0', port=int(20869))  # Change port as needed
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
