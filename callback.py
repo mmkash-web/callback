@@ -1,4 +1,3 @@
-
 from flask import Flask, request, jsonify
 import logging
 
@@ -59,3 +58,4 @@ def parse_mpesa_message(mpesa_message: str):
 
 if __name__ == '__main__':
     app.run(debug=True)
+
