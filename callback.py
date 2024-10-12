@@ -1,45 +1,51 @@
 from flask import Flask, request, jsonify
-import logging
-import os
-import json
+import requests
 
 app = Flask(__name__)
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Your Telegram bot token
+TELEGRAM_BOT_TOKEN = '7626726530:AAHnNs51Ew8_lZEnD0VLXkAJBvpAVyRzLig'
+# Your Telegram chat ID (you can get this by sending a message to your bot and checking the updates)
+CHAT_ID = '1870796520'
 
-# Load the transaction logs to keep track of confirmations
-transaction_log = {}
-
-@app.route('/verify_transaction', methods=['POST'])
-def verify_transaction():
-    """Verify the M-Pesa transaction using the provided reference and confirmation message."""
+# Route to handle M-Pesa callback
+@app.route('/billing/callback1', methods=['POST'])
+def mpesa_callback():
+    # Log the incoming data for debugging
     data = request.json
-    transaction_reference = data.get('transaction_reference')
-    mpesa_confirmation_message = data.get('mpesa_confirmation_message')
+    print("Received data:", data)  # Log the received data
 
-    if not transaction_reference or not mpesa_confirmation_message:
-        return jsonify({"error": "Invalid data provided"}), 400
+    # Validate the structure of the data
+    if not validate_mpesa_data(data):
+        return jsonify({"error": "Invalid M-Pesa confirmation message format."}), 400
 
-    # Verify the transaction reference and confirmation message
-    if transaction_reference in transaction_log:
-        return jsonify({"verified": False, "message": "Transaction has already been confirmed."}), 200
+    # Send a message to Telegram about the successful payment
+    send_telegram_message("Payment received: " + str(data))
 
-    if is_valid_mpesa_confirmation(mpesa_confirmation_message):
-        # Log the transaction as confirmed
-        transaction_log[transaction_reference] = {
-            "confirmed": True,
-            "confirmation_message": mpesa_confirmation_message
-        }
-        return jsonify({"verified": True}), 200
-    else:
-        return jsonify({"verified": False, "message": "Invalid M-Pesa confirmation message format."}), 200
+    # Process the data here (e.g., save the transaction details to your database)
 
-def is_valid_mpesa_confirmation(message: str) -> bool:
-    """Check if the M-Pesa confirmation message is in a valid format."""
-    # Implement your logic here to check the confirmation message format
-    return "Payment" in message and "of" in message
+    return jsonify({"status": "success"}), 200
 
-if __name__ == '__main__':
+def validate_mpesa_data(data):
+    # Implement your validation logic here
+    required_fields = ['transactionId', 'amount', 'phoneNumber', 'transactionTime']
+
+    for field in required_fields:
+        if field not in data:
+            print(f"Missing field: {field}")
+            return False
+
+    return True
+
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': CHAT_ID,
+        'text': message
+    }
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        print("Failed to send message to Telegram:", response.text)
+
+if __name__ == "__main__":
     app.run(debug=True)
-
