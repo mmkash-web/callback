@@ -13,11 +13,19 @@ user_requests = {}
 @app.route('/billing/callback1', methods=['POST'])
 def billing_callback():
     try:
+        # Log the entire request form for debugging
+        app.logger.info(f"Request form: {request.form}")
+
+        # Get the mpesa_message from the request
         mpesa_message = request.form.get('mpesa_message')
+        
+        if mpesa_message is None:
+            app.logger.error("M-Pesa message is missing in the request.")
+            return jsonify({"status": "error", "message": "M-Pesa message is missing."}), 400
         
         # Log the received message
         app.logger.info(f"Received M-Pesa message: {mpesa_message}")
-        
+
         # Example regex to extract necessary information (customize as needed)
         pattern = r"(?P<transaction_id>SJC\d+)\s+Confirmed\.\s+Ksh(?P<amount>\d+(\.\d+)?)\s+paid\s+to\s+(?P<recipient>.+?)\s+on\s+(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+at\s+(?P<time>\d{1,2}:\d{2}\s+[AP]M)\."
         match = re.search(pattern, mpesa_message)
