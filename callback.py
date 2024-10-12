@@ -19,8 +19,9 @@ def verify_mpesa_message():
 
     logger.info(f"Received M-Pesa message: {mpesa_message}")
 
-    # Regex to extract the relevant information from the M-Pesa message
-    pattern = r"(?P<code>SJC[0-9]+) Confirmed\. Ksh(?P<amount>[0-9.]+) paid to (?P<recipient>.+?) on (?P<date>[0-9/]+) at (?P<time>[0-9: ]+)\. New M-PESA balance is Ksh(?P<balance>[0-9.]+)\. Transaction cost, Ksh(?P<cost>[0-9.]+)\."
+    # Updated regex pattern to match the entire M-Pesa message format
+    pattern = r"(?P<code>SJC[0-9]+) Confirmed\. Ksh(?P<amount>[0-9.,]+) paid to (?P<recipient>.+?) on (?P<date>[0-9/]+) at (?P<time>[0-9: ]+)\. New M-PESA balance is Ksh(?P<balance>[0-9.,]+)\. Transaction cost, Ksh(?P<cost>[0-9.,]+)\. Amount you can transact within the day is (?P<daily_limit>[0-9.,]+)\. Download new M-PESA app on (?P<download_link>http[s]?://[^\s]+) & get (?P<bonus>[0-9]+MB) FREE data\."
+
     match = re.match(pattern, mpesa_message)
 
     if match:
