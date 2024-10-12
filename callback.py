@@ -1,40 +1,45 @@
 from flask import Flask, request, jsonify
 import logging
+import os
+import json
 
 app = Flask(__name__)
 
-# Set up logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Simulated transaction data for demonstration purposes
-transaction_data = {
-    "INV-009": {"status": "confirmed"},
-    # Add more transactions as needed
-}
+# Load the transaction logs to keep track of confirmations
+transaction_log = {}
 
-@app.route('/')
-def home():
-    return "Welcome to the M-Pesa Callback Handler!"
-
-@app.route('/billing/callback1', methods=['POST'])
-def handle_billing_callback():
-    """Handle incoming M-Pesa confirmation messages for billing."""
+@app.route('/verify_transaction', methods=['POST'])
+def verify_transaction():
+    """Verify the M-Pesa transaction using the provided reference and confirmation message."""
     data = request.json
-    app.logger.info(f"Received data: {data}")  # Log the incoming data
+    transaction_reference = data.get('transaction_reference')
+    mpesa_confirmation_message = data.get('mpesa_confirmation_message')
 
-    transaction_reference = data.get("transaction_reference")
-    mpesa_confirmation_message = data.get("mpesa_confirmation_message")
+    if not transaction_reference or not mpesa_confirmation_message:
+        return jsonify({"error": "Invalid data provided"}), 400
 
-    if transaction_reference and mpesa_confirmation_message:
-        # Verify transaction reference and status
-        transaction_info = transaction_data.get(transaction_reference)
+    # Verify the transaction reference and confirmation message
+    if transaction_reference in transaction_log:
+        return jsonify({"verified": False, "message": "Transaction has already been confirmed."}), 200
 
-        if transaction_info and transaction_info["status"] == "confirmed":
-            return jsonify({"status": "confirmed"}), 200
-        else:
-            return jsonify({"status": "unverified"}), 400
+    if is_valid_mpesa_confirmation(mpesa_confirmation_message):
+        # Log the transaction as confirmed
+        transaction_log[transaction_reference] = {
+            "confirmed": True,
+            "confirmation_message": mpesa_confirmation_message
+        }
+        return jsonify({"verified": True}), 200
     else:
-        return jsonify({"error": "Missing parameters"}), 400
+        return jsonify({"verified": False, "message": "Invalid M-Pesa confirmation message format."}), 200
+
+def is_valid_mpesa_confirmation(message: str) -> bool:
+    """Check if the M-Pesa confirmation message is in a valid format."""
+    # Implement your logic here to check the confirmation message format
+    return "Payment" in message and "of" in message
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=57576)
+    app.run(debug=True)
+
