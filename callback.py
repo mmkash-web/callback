@@ -4,71 +4,67 @@ import re
 
 app = Flask(__name__)
 
-# Configure logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Dummy in-memory storage for user requests (replace with a database in production)
-user_requests = {}
+# Replace with your actual user ID and message storage
+user_id = "USER_ID_PLACEHOLDER"
+user_messages = {}
 
 @app.route('/billing/callback1', methods=['POST'])
 def billing_callback():
-    try:
-        # Log the entire request form for debugging
-        app.logger.info(f"Request form: {request.form}")
+    # Log the entire request for debugging
+    app.logger.info(f"Request data: {request.data}")
+    app.logger.info(f"Request form: {request.form}")
+    app.logger.info(f"Request headers: {request.headers}")
 
-        # Get the mpesa_message from the request
-        mpesa_message = request.form.get('mpesa_message')
-        
-        if mpesa_message is None:
-            app.logger.error("M-Pesa message is missing in the request.")
-            return jsonify({"status": "error", "message": "M-Pesa message is missing."}), 400
-        
-        # Log the received message
+    mpesa_message = request.form.get('mpesa_message')
+
+    if not mpesa_message:
+        app.logger.error("M-Pesa message is missing in the request.")
+        return jsonify({"error": "M-Pesa message is missing."}), 400
+
+    # Process the incoming message
+    try:
         app.logger.info(f"Received M-Pesa message: {mpesa_message}")
 
-        # Example regex to extract necessary information (customize as needed)
-        pattern = r"(?P<transaction_id>SJC\d+)\s+Confirmed\.\s+Ksh(?P<amount>\d+(\.\d+)?)\s+paid\s+to\s+(?P<recipient>.+?)\s+on\s+(?P<date>\d{1,2}/\d{1,2}/\d{2,4})\s+at\s+(?P<time>\d{1,2}:\d{2}\s+[AP]M)\."
-        match = re.search(pattern, mpesa_message)
+        # Store the message for the user
+        if user_id not in user_messages:
+            user_messages[user_id] = []
+        user_messages[user_id].append(mpesa_message)
 
-        if match:
-            transaction_id = match.group('transaction_id')
-            amount = match.group('amount')
-            recipient = match.group('recipient')
-            date = match.group('date')
-            time = match.group('time')
-
-            # Log the parsed information
-            app.logger.info(f"Transaction ID: {transaction_id}, Amount: Ksh{amount}, Recipient: {recipient}, Date: {date}, Time: {time}")
-
-            # Compare with user requests
-            if transaction_id in user_requests:
-                user_amount = user_requests[transaction_id]  # Assume this holds the amount user requested
-                if user_amount == amount:
-                    app.logger.info("Transaction amount matches user's request.")
-                    # Process the transaction further, e.g., mark it as successful
-                else:
-                    app.logger.warning("Transaction amount does not match user's request.")
-            else:
-                app.logger.warning("Transaction ID not found in user requests.")
-
-            return jsonify({"status": "success", "message": "Callback processed successfully."}), 200
+        # Example parsing logic: extract the amount paid
+        amount_paid = re.search(r'Ksh([\d,]+\.?\d*)', mpesa_message)
+        if amount_paid:
+            amount_paid = amount_paid.group(1).replace(",", "")
+            app.logger.info(f"Amount paid: Ksh{amount_paid}")
         else:
-            app.logger.error("Error parsing M-Pesa message: Failed to parse M-Pesa message")
-            return jsonify({"status": "error", "message": "Failed to parse M-Pesa message"}), 400
+            app.logger.warning("Failed to extract amount from the M-Pesa message.")
 
     except Exception as e:
-        app.logger.error(f"Error processing callback: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        app.logger.error(f"Error processing M-Pesa message: {e}")
+        return jsonify({"error": "Failed to process M-Pesa message."}), 500
 
-@app.route('/request_payment', methods=['POST'])
-def request_payment():
-    # Dummy endpoint for user payment requests
-    transaction_id = request.form.get('transaction_id')
-    amount = request.form.get('amount')
+    return jsonify({"status": "success"}), 200
 
-    # Store the user request (replace with a database in production)
-    user_requests[transaction_id] = amount
-    return jsonify({"status": "success", "message": "Payment request stored."}), 200
+
+@app.route('/verify', methods=['GET'])
+def verify_message():
+    mpesa_message = request.args.get('mpesa_message')
+
+    if not mpesa_message:
+        app.logger.error("M-Pesa message is missing in the request.")
+        return jsonify({"error": "M-Pesa message is missing."}), 400
+
+    # Example verification logic
+    # Here you would implement your logic to compare the message with user input
+    app.logger.info(f"Verifying M-Pesa message: {mpesa_message}")
+    # Simulate verification logic
+    if mpesa_message in user_messages.get(user_id, []):
+        return jsonify({"status": "verified", "message": "Message matches."}), 200
+    else:
+        return jsonify({"status": "not_verified", "message": "Message does not match."}), 404
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=20869)
