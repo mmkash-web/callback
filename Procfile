@@ -1,2 +1,3 @@
-web: gunicorn callback:app
+web: gunicorn app:app
+
 
